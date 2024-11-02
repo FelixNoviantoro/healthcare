@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: api-core
+  datasource:
+    url: jdbc:postgresql://10.8.135.153:5432/postgres
+    username: dev
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
