@@ -1,11 +1,19 @@
+server:
+  port: 8081
 spring:
   application:
     name: api-core
   datasource:
-    url: jdbc:postgresql://10.8.135.153:5432/postgres
-    username: dev
-    password: password
+    url: jdbc:postgresql://${DB_HOST:10.8.135.153}:${DB_PORT:5432}/${DB_NAME:postgres}
+    username: ${DB_USER:dev}
+    password: ${DB_PASS:password}
   jpa:
     hibernate:
       ddl-auto: create
     show-sql: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://${KEYCLOAK_HOST:localhost:8080}/realms/${KEYCLOAK_REALM:healthcare}
+          jwk-set-uri: http://${KEYCLOAK_HOST:localhost:8080}/realms/${KEYCLOAK_REALM:healthcare}/protocol/openid-connect/certs
