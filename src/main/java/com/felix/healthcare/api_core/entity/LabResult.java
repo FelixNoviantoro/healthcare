@@ -23,6 +23,9 @@ public class LabResult {
     private String resultData;
     private String taskId;
 
+    // Optional for bulk upload
+    private String jobId;
+
     @CreationTimestamp
     private LocalDateTime dateCreated;
 }

@@ -36,8 +36,7 @@ public class LabResultDto {
     @AllArgsConstructor
     @NoArgsConstructor
     public static class BulkUploadResponse{
-        private String taskId;
-        private String status;
+        private String jobId;
     }
 
     @Data

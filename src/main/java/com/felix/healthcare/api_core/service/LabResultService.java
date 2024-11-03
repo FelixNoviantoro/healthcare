@@ -5,6 +5,8 @@ import com.felix.healthcare.api_core.entity.LabResult;
 import com.felix.healthcare.api_core.entity.Patient;
 import com.felix.healthcare.api_core.repository.LabResultRepository;
 import com.felix.healthcare.api_core.repository.PatientRepository;
+import com.felix.healthcare.api_core.utils.RandomIdGenerator;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.CellType;
@@ -12,14 +14,20 @@ import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +36,7 @@ public class LabResultService {
 
     private final LabResultRepository labResultRepository;
     private final PatientRepository patientRepository;
+    private final CacheManager cacheManager;
 
     public List<LabResult> getAll(){
         List<LabResult> labResults = labResultRepository.findAll();
@@ -36,6 +45,10 @@ public class LabResultService {
 
     public Optional<LabResult> getByTaskId(String taskId){
         return labResultRepository.findByTaskId(taskId);
+    }
+
+    public List<LabResult> getByJobId(String jobId){
+        return labResultRepository.findByJobId(jobId);
     }
 
     public String submit(LabResultDto.SubmitRequest data){
@@ -47,7 +60,7 @@ public class LabResultService {
         }
 
         // Generate Task Id
-        String taskId = generateTaskId();
+        String taskId = RandomIdGenerator.randomGenerator("Task-");
 
         LabResult labResult = new LabResult();
         labResult.setPatientId(patient.get());
@@ -62,119 +75,109 @@ public class LabResultService {
         return taskId;
     }
 
-    public LabResultDto.BulkUploadSummaryResponse saveFromExcel(MultipartFile file) throws IOException {
-        XSSFWorkbook workbook = new XSSFWorkbook(file.getInputStream());
+    @Async
+    public CompletableFuture<LabResultDto.BulkUploadSummaryResponse> saveFromExcel(byte[] fileBytes, String jobId) throws IOException {
 
-        // Let say we use the first sheet
-        XSSFSheet sheet = workbook.getSheetAt(0);
+        Cache jobStatusCache = cacheManager.getCache("jobStatusCache");
+        jobStatusCache.put(jobId, "IN_PROGRESS");
 
-        DataFormatter dataFormatter = new DataFormatter();
+        CompletableFuture<LabResultDto.BulkUploadSummaryResponse> task = new CompletableFuture<>();
+        try {
+            InputStream inputStream = new ByteArrayInputStream(fileBytes);
+            XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
 
-        // Instantiate the response model
-        List<LabResultDto.BulkUploadResponse> bulkUploadResponses = new ArrayList<>();
-        LabResultDto.BulkUploadSummaryResponse summaryResponse = new LabResultDto.BulkUploadSummaryResponse();
+            // Let say we use the first sheet
+            XSSFSheet sheet = workbook.getSheetAt(0);
 
-        int records = 0;
-        int errors = 0;
-        int index = 0;
+            DataFormatter dataFormatter = new DataFormatter();
 
-        for (Row row: sheet){
-            // Check if the row is header
-            if (index++ == 0) continue;
+            // Instantiate the response model
 
-            //records counter
-            records++;
+            List<LabResultDto.BulkUploadResponse> bulkUploadResponses = new ArrayList<>();
+            LabResultDto.BulkUploadSummaryResponse summaryResponse = new LabResultDto.BulkUploadSummaryResponse();
 
-            // Prepare labresult object for data save
-            LabResult labResult = new LabResult();
+            int records = 0;
+            int errors = 0;
+            int index = 0;
 
-            // Generate task id
-            String taskId = generateTaskId();
+            for (Row row: sheet){
+                // Check if the row is header
+                if (index++ == 0) continue;
+                boolean isFailed = false;
+                //records counter
+                records++;
 
-            // Check if the row is not null and the type is numeric for the patient id
-            if (row.getCell(0) != null && row.getCell(0).getCellType() == CellType.NUMERIC){
-                // Get the excel numeric value
-                double idDouble = row.getCell(0).getNumericCellValue();
+                // Prepare labresult object for data save
+                LabResult labResult = new LabResult();
 
-                // Check if the patient exist
-                Optional<Patient> patient = patientRepository.findById((long) idDouble);
+                // Generate task id
+                String taskId = RandomIdGenerator.randomGenerator("Task-");
 
-                // Set the patient if present and go to the next row if the patient empty
-                if(patient.isPresent()){
-                    labResult.setPatientId(patient.get());
+                // Check if the row is not null and the type is numeric for the patient id
+                if (row.getCell(0) != null && row.getCell(0).getCellType() == CellType.NUMERIC){
+                    // Get the excel numeric value
+                    double idDouble = row.getCell(0).getNumericCellValue();
+
+                    // Check if the patient exist
+                    Optional<Patient> patient = patientRepository.findById((long) idDouble);
+
+                    // Set the patient if present and go to the next row if the patient empty
+                    if(patient.isPresent()){
+                        labResult.setPatientId(patient.get());
+                    } else {
+                        // Count the error record and set the status to failed
+                        isFailed = true;
+                    }
+                }
+
+                // Check for the test type data and format this to string
+                if (!isFailed && row.getCell(1) != null) {
+                    labResult.setTestType(dataFormatter.formatCellValue(row.getCell(1)));
+                } else{
+                    // Count the error record and set the status to failed
+                    isFailed = true;
+                }
+
+                // Check for the sample data and format this to string
+                if (!isFailed && row.getCell(2) != null) {
+                    labResult.setSampleData(dataFormatter.formatCellValue(row.getCell(2)));
                 } else {
+                    isFailed = true;
+                }
+
+                labResult.setTaskId(taskId);
+                labResult.setJobId(jobId);
+
+                if (isFailed){
                     // Count the error record and set the status to failed
                     errors++;
                     labResult.setStatus("Failed");
-                    bulkUploadResponses.add(labResultToReponseMapper(labResult));
-
-                    // Jump into the next row
-                    continue;
+                    labResult.setResultData("-");
+                } else {
+                    // Success record object
+                    labResult.setStatus("Pending");
+                    labResult.setResultData("result");
                 }
+
+                // Save the lab result
+                labResultRepository.save(labResult);
             }
 
-            // Check for the test type data and format this to string
-            if (row.getCell(1) != null) {
-                labResult.setTestType(dataFormatter.formatCellValue(row.getCell(1)));
-            } else{
-                // Count the error record and set the status to failed
-                errors++;
-                labResult.setStatus("Failed");
-                bulkUploadResponses.add(labResultToReponseMapper(labResult));
+            // Set the summary response
+            summaryResponse.setErrors(errors);
+            summaryResponse.setRecords(records);
 
-                // Jump into the next row
-                continue;
-            }
+            task.complete(summaryResponse);
+            jobStatusCache.put(jobId, "COMPLETED");
 
-            // Check for the sample data and format this to string
-            if (row.getCell(2) != null) {
-                labResult.setSampleData(dataFormatter.formatCellValue(row.getCell(2)));
-            } else {
-                // Count the error record and set the status to failed
-                errors++;
-                labResult.setStatus("Failed");
-                bulkUploadResponses.add(labResultToReponseMapper(labResult));
+        } catch (Exception e) {
 
-                // Jump into the next row
-                continue;
-            }
+            log.error("An error occurred: ", e);
+            task.completeExceptionally(e);
 
-            labResult.setStatus("Pending");
-            labResult.setResultData("result");
-            labResult.setTaskId(taskId);
-
-            // Save the lab result
-            labResultRepository.save(labResult);
-
-            // Add data to response list
-            bulkUploadResponses.add(labResultToReponseMapper(labResult));
         }
 
-        // Set the summary response
-        summaryResponse.setBulkUploadResponseList(bulkUploadResponses);
-        summaryResponse.setErrors(errors);
-        summaryResponse.setRecords(records);
-
-        return summaryResponse;
-    }
-
-    public static String generateTaskId() {
-        Random random = new Random();
-
-        // Generates a random number between 100 and 999 and add 'Task' as prefix
-        int randomNumber = 100 + random.nextInt(900);
-        return "Task" + randomNumber;
-    }
-
-    private LabResultDto.BulkUploadResponse labResultToReponseMapper(LabResult data){
-        // Prepare for response object
-        LabResultDto.BulkUploadResponse response = new LabResultDto.BulkUploadResponse();
-
-        // Map data to response
-        response.setStatus(data.getStatus());
-        response.setTaskId(data.getTaskId());
-
-        return response;
+        return task;
     }
 
 }
