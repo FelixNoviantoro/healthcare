@@ -29,7 +29,7 @@ public class UserService {
 
         if (optionalUsers.isPresent()){
             // User with this username has been existed
-            throw new Exception();
+            throw new Exception("User with this " + data.getUsername() + " already exists");
         }
 
         // Hash Password

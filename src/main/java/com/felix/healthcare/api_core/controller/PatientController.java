@@ -23,7 +23,7 @@ public class PatientController {
         return ResponseEntity.ok(patients);
     }
 
-    @PostMapping("/save")
+    @PostMapping
     public ResponseEntity<?> save(
             @RequestBody PatientDto.Save data
             ) {

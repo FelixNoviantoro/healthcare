@@ -37,20 +37,36 @@ public class ApiCoreApplication {
 			));
 
 			Roles adminRole = roleRepository.findByName("admin");
-			System.out.println("role : " + adminRole.getId());
+			Roles userRole = roleRepository.findByName("user");
+			System.out.println("role admin : " + adminRole.getId() + ", role user : " + userRole.getId());
 
-			Set<Roles> roles = new HashSet<>();
-			roles.add(adminRole);
+			Set<Roles> rolesAdmin = new HashSet<>();
+			rolesAdmin.add(adminRole);
+
+			Set<Roles> rolesUser = new HashSet<>();
+			rolesAdmin.add(userRole);
+
 			String hashPassword = BCrypt.hashpw("password", BCrypt.gensalt(12));
 
-			Users user = new Users();
-			user.setUsername("admin");
-			user.setEmail("admin@test.com");
-			user.setPassword(hashPassword);
-			user.setRoles(roles);
+			Users userAdmin = new Users();
+			userAdmin.setUsername("admin");
+			userAdmin.setEmail("admin@test.com");
+			userAdmin.setPassword(hashPassword);
+			userAdmin.setRoles(rolesAdmin);
 
-			Users adminUser = userRepository.save(user);
-			System.out.println("user : " + adminUser.getEmail());
+			Users userUser = new Users();
+			userUser.setUsername("user");
+			userUser.setEmail("user@test.com");
+			userUser.setPassword(hashPassword);
+			userUser.setRoles(rolesUser);
+
+			userRepository.saveAll(Arrays.asList(
+					userAdmin,
+					userUser
+			));
+
+//			Users adminUser = userRepository.save(userAdmin);
+			System.out.println("admin email : " + userAdmin.getEmail() + ", user email : " + userUser.getEmail());
 		};
 	}
 
