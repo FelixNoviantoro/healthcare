@@ -11,6 +11,7 @@ This healthcare architecture overview
 - JPA
 - Postgresql Database (16.2)
 - Keycloak (21.1.1)
+
 ## _Prerequisites_
 - Docker
 
@@ -142,7 +143,7 @@ curl --location 'http://localhost:8081/api/patient' \
 --header 'Authorization: Bearer {user-token}'
 ```
 
-to do upload the file excel you can do:
+on ./files/lab.xlsx as example to upload. to test you can do:
 ```shell
 curl --location 'http://localhost:8081/api/lab-result/upload' \
 --header 'Authorization: Bearer {admin-token}' \
