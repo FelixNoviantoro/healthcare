@@ -149,3 +149,9 @@ curl --location 'http://localhost:8081/api/lab-result/upload' \
 --header 'Authorization: Bearer {admin-token}' \
 --form 'file=@"/D:/work/Itv/lab.xlsx"'
 ```
+
+to check if the job done or still on process you can use this. the job id can be obtained from the response results of the upload excel endpoint :
+```shell
+curl --location 'http://localhost:8080/api/lab-result/upload/{job-id}' \
+--header 'Authorization: Bearer {user-token}'
+```
