@@ -21,7 +21,7 @@ public class SecurityConfig {
         http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         http.authorizeHttpRequests(request ->
                         request
-                                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/api/user/**").permitAll()
+                                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**","/actuator/**", "/api/user/**").permitAll()
                                 .requestMatchers("/api/patient/**").hasRole("admin")
                                 .anyRequest().authenticated())
                 .oauth2ResourceServer(resource -> resource.jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakRoleConverter)));
