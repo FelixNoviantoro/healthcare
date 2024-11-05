@@ -3,7 +3,7 @@
 ## _OVERVIEW_
 ![healthcare-dark drawio](https://github.com/user-attachments/assets/c7459c8d-88af-448f-a86f-eebfa4ffec19)
 
-This healthcare backend spring boot application designed to manage.
+This healthcare architecture overview
 
 ## _Technologies Used_
 - Spring Boot
